@@ -11,19 +11,21 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.91.3",
-    "@walletconnect/ethereum-provider": "^2.17.0",
-    "@web3modal/wagmi": "^5.1.11",
+    "@walletconnect/ethereum-provider": "2.17.0",
+    "@web3modal/wagmi": "5.1.11",
     "axios": "^1.13.6",
     "ethers": "^6.16.0",
     "next": "^15.3.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "viem": "^2.47.6",
-    "wagmi": "^2.19.5"
+    "viem": "2.21.54",
+    "wagmi": "2.12.19"
   },
   "overrides": {
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "viem": "2.21.54",
+    "wagmi": "2.12.19"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
