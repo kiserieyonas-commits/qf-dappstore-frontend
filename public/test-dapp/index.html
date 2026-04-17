@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Shop DApp</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 20px;
+      background: #1a1a2e;
+      color: white;
+    }
+    .product {
+      border: 1px solid #06b6d4;
+      padding: 20px;
+      margin: 10px 0;
+      border-radius: 8px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #06b6d4;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🛒 Test Shop</h1>
+  <p>Buy items with QF tokens (via DappStore)</p>
+
+  <div id="wallet-status">
+    <button onclick="connectWallet()">Connect Wallet</button>
+  </div>
+
+  <div id="products">
+    <div class="product">
+      <h3>Premium NFT</h3>
+      <p>Price: 0.1 QF</p>
+      <button onclick="buy('0.1')">Buy Now</button>
+    </div>
+
+    <div class="product">
+      <h3>Rare Item</h3>
+      <p>Price: 0.5 QF</p>
+      <button onclick="buy('0.5')">Buy Now</button>
+    </div>
+  </div>
+
+  <script>
+    var userAddress;
+
+    async function connectWallet() {
+      const accounts = await requestWallet('eth_requestAccounts');
+      userAddress = accounts[0];
+      document.getElementById('wallet-status').innerHTML =
+        'Connected: ' + userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+    }
+
+    async function buy(amount) {
+      if (!userAddress) {
+        alert('Please connect wallet first');
+        return;
+      }
+
+      try {
+        // Convert ETH string to hex wei without floating-point precision loss.
+        // Splits on the decimal point and pads the fractional part to 18 digits,
+        // then converts the resulting integer string to BigInt before hex encoding.
+        var weiHex = ethToHex(amount);
+
+        var tx = {
+          from:  userAddress,
+          to:    '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // Shop owner
+          value: weiHex
+        };
+
+        var txHash = await requestWallet('eth_sendTransaction', [tx]);
+        alert('Purchase successful! TX: ' + txHash);
+      } catch (error) {
+        alert('Purchase failed: ' + error.message);
+      }
+    }
+
+    /**
+     * Convert a decimal ETH string (e.g. "0.1") to a 0x-prefixed hex wei string.
+     * Uses string arithmetic to avoid IEEE 754 float precision loss.
+     */
+    function ethToHex(ethStr) {
+      var parts   = ethStr.split('.');
+      var whole   = parts[0] || '0';
+      var frac    = (parts[1] || '').slice(0, 18).padEnd(18, '0');
+      var weiBig  = BigInt(whole) * BigInt('1000000000000000000') + BigInt(frac);
+      return '0x' + weiBig.toString(16);
+    }
+
+    // ── Wallet bridge (postMessage protocol) ──────────────────────────────────
+    // Uses 'requestId' to match the QF DappStore WALLET_REQUEST / WALLET_RESPONSE
+    // protocol used by DappRunner.tsx, DappViewer.jsx, and walletInjector.js.
+
+    var requestId = 0;
+    var pendingRequests = new Map();
+
+    function requestWallet(method, params) {
+      params = params || [];
+      return new Promise(function(resolve, reject) {
+        var id = ++requestId;
+        pendingRequests.set(id, { resolve: resolve, reject: reject });
+
+        window.parent.postMessage({
+          type:      'WALLET_REQUEST',
+          requestId: id,
+          method:    method,
+          params:    params
+        }, '*');
+
+        setTimeout(function() {
+          if (pendingRequests.has(id)) {
+            pendingRequests.delete(id);
+            reject(new Error('Wallet request timed out: ' + method));
+          }
+        }, 30000);
+      });
+    }
+
+    window.addEventListener('message', function(event) {
+      var d = event.data;
+      if (!d || d.type !== 'WALLET_RESPONSE') return;
+
+      var req = pendingRequests.get(d.requestId);
+      if (req) {
+        pendingRequests.delete(d.requestId);
+        if (d.error) {
+          req.reject(new Error(d.error));
+        } else {
+          req.resolve(d.result);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
